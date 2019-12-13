@@ -17,7 +17,7 @@
 
 #ifdef VENDOR_EDIT
 /* zhangkun@BSP.CHG.Basic, 2019/03/25, Add for charging */
-#include "../../../../../vendor/oppo_charger/oppo/charger_ic/oppo_battery_msm8150_pro.h"
+#include "../../oppo/charger_ic/oppo_battery_msm8150_pro.h"
 #endif
 
 #define SCHGM_FLASH_BASE			0xA600
