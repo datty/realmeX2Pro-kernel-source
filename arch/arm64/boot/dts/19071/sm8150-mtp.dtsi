@@ -17,6 +17,8 @@
 #include "sm8150-sde-display.dtsi"
 #include "sm8150-camera-sensor-mtp.dtsi"
 #include "sm8150-thermal-overlay.dtsi"
+#include "sdx5xm-external-soc.dtsi"
+#include "sm8150-sdx50m.dtsi"
 
 &qupv3_se4_i2c {
 #include "smb1390.dtsi"
