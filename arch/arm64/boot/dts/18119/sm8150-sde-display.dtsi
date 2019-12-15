@@ -41,6 +41,8 @@
 //#endif VENDOR_EDIT
 #include "dsi-panel-nt36850-truly-dualmipi-wqhd-cmd.dtsi"
 #include <dt-bindings/clock/mdss-10nm-pll-clk.h>
+#include "sm8150-audio-overlay.dtsi"
+#include "sm8150-oppo-audio-overlay.dtsi"
 
 &tlmm {
 	display_panel_avdd_eldo_default: display_panel_avdd_eldo_default {
