@@ -161,6 +161,18 @@ static int32_t cam_actuator_i2c_modes_util(
 	int32_t rc = 0;
 	uint32_t i, size;
 
+#ifdef VENDOR_EDIT
+	/* Add by xiaotao.Ding@Cam.Drv 20181122 for sem12152 */
+	uint32_t value;
+	if (i2c_list->i2c_settings.reg_setting[0].reg_addr == 0x0204)
+	{
+		value = (i2c_list->i2c_settings.reg_setting[0].reg_data & 0xFF00) >> 8;
+		i2c_list->i2c_settings.reg_setting[0].reg_data =
+		  ((i2c_list->i2c_settings.reg_setting[0].reg_data & 0xFF) << 8) | value;
+		CAM_DBG(CAM_ACTUATOR,"new value %d", i2c_list->i2c_settings.reg_setting[0].reg_data);
+	}
+#endif
+
 	if (i2c_list->op_code == CAM_SENSOR_I2C_WRITE_RANDOM) {
 		rc = camera_io_dev_write(io_master_info,
 			&(i2c_list->i2c_settings));
@@ -786,7 +798,7 @@ int32_t cam_actuator_driver_cmd(struct cam_actuator_ctrl_t *a_ctrl,
 		bridge_params.v4l2_sub_dev_flag = 0;
 		bridge_params.media_entity_flag = 0;
 		bridge_params.priv = a_ctrl;
-		bridge_params.dev_id = CAM_ACTUATOR;
+
 		actuator_acq_dev.device_handle =
 			cam_create_device_hdl(&bridge_params);
 		a_ctrl->bridge_intf.device_hdl = actuator_acq_dev.device_handle;

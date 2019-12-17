@@ -208,7 +208,10 @@ static void ufshcd_update_uic_error_cnt(struct ufs_hba *hba, u32 reg, int type)
 				 UTP_TASK_REQ_COMPL |\
 				 UFSHCD_ERROR_MASK)
 /* UIC command timeout, unit: ms */
-#define UIC_CMD_TIMEOUT	500
+#if VENDOR_EDIT
+//Zhenjian Jiang@BSP.Kernel.Stability, 2019/01/17, add for avoid ufs command timeout issue temporarily
+#define UIC_CMD_TIMEOUT	1000
+#endif
 
 /* NOP OUT retries waiting for NOP IN response */
 #define NOP_OUT_RETRIES    10
@@ -4520,6 +4523,12 @@ int ufshcd_map_desc_id_to_length(struct ufs_hba *hba,
 	case QUERY_DESC_IDN_RFU_1:
 		*desc_len = 0;
 		break;
+#ifdef VENDOR_EDIT
+	//xiaofan.yang@PSW.TECH.Stability, 2019/03/15,Add for check storage endurance
+	case QUERY_DESC_IDN_HEALTH:
+		*desc_len = hba->desc_size.hlth_desc;
+		break;
+#endif
 	default:
 		*desc_len = 0;
 		return -EINVAL;
@@ -5600,9 +5609,19 @@ static int ufshcd_complete_dev_init(struct ufs_hba *hba)
 	}
 
 	/* poll for max. 1000 iterations for fDeviceInit flag to clear */
-	for (i = 0; i < 1000 && !err && flag_res; i++)
+#ifndef VENDOR_EDIT
+//yh@BSP.Storage.UFS, 2019-06-21 add for ufs device can't complete init
+	for (i = 0; i < 1000 && !err && flag_res; i++) {
+#else
+	for (i = 0; i < 1500 && !err && flag_res; i++) {
+#endif
 		err = ufshcd_query_flag_retry(hba, UPIU_QUERY_OPCODE_READ_FLAG,
 			QUERY_FLAG_IDN_FDEVICEINIT, &flag_res);
+#ifdef VENDOR_EDIT
+//yh@BSP.Storage.UFS, 2019-06-21 add for ufs device can't complete init
+		usleep_range(1000, 1000); // 1ms sleep
+#endif
+	}
 
 	if (err)
 		dev_err(hba->dev,
@@ -8534,6 +8553,13 @@ static void ufshcd_init_desc_sizes(struct ufs_hba *hba)
 		&hba->desc_size.geom_desc);
 	if (err)
 		hba->desc_size.geom_desc = QUERY_DESC_GEOMETRY_DEF_SIZE;
+#ifdef VENDOR_EDIT
+	//xiaofan.yang@PSW.TECH.Stability, 2019/03/15,Add for check storage endurance
+	err = ufshcd_read_desc_length(hba, QUERY_DESC_IDN_HEALTH, 0,
+	    &hba->desc_size.hlth_desc);
+	if (err)
+        hba->desc_size.hlth_desc = QUERY_DESC_HEALTH_DEF_SIZE;
+#endif
 }
 
 static void ufshcd_def_desc_sizes(struct ufs_hba *hba)
@@ -8544,6 +8570,10 @@ static void ufshcd_def_desc_sizes(struct ufs_hba *hba)
 	hba->desc_size.conf_desc = QUERY_DESC_CONFIGURATION_DEF_SIZE;
 	hba->desc_size.unit_desc = QUERY_DESC_UNIT_DEF_SIZE;
 	hba->desc_size.geom_desc = QUERY_DESC_GEOMETRY_DEF_SIZE;
+#ifdef VENDOR_EDIT
+	//xiaofan.yang@PSW.TECH.Stability, 2019/03/15,Add for check storage endurance
+	hba->desc_size.hlth_desc = QUERY_DESC_HEALTH_DEF_SIZE;
+#endif
 }
 
 static void ufshcd_apply_pm_quirks(struct ufs_hba *hba)
@@ -10875,6 +10905,102 @@ out_error:
 }
 EXPORT_SYMBOL(ufshcd_alloc_host);
 
+#ifdef VENDOR_EDIT
+//xiaofan.yang@PSW.TECH.Stability, 2019/03/15,Add for check storage endurance
+#include <asm/unaligned.h>
+static ssize_t ufs_sysfs_read_desc_param(struct ufs_hba *hba,
+				  enum desc_idn desc_id,
+				  u8 desc_index,
+				  u8 param_offset,
+				  u8 *sysfs_buf,
+				  u8 param_size)
+{
+	u8 desc_buf[8] = {0};
+	int ret;
+
+	if (param_size > 8)
+		return -EINVAL;
+
+	ret = ufshcd_read_desc_param(hba, desc_id, desc_index,
+				param_offset, desc_buf, param_size);
+	if (ret)
+		return -EINVAL;
+	switch (param_size) {
+	case 1:
+		ret = sprintf(sysfs_buf, "0x%02X\n", *desc_buf);
+		break;
+	case 2:
+		ret = sprintf(sysfs_buf, "0x%04X\n",
+			get_unaligned_be16(desc_buf));
+		break;
+	case 4:
+		ret = sprintf(sysfs_buf, "0x%08X\n",
+			get_unaligned_be32(desc_buf));
+		break;
+	case 8:
+		ret = sprintf(sysfs_buf, "0x%016llX\n",
+			get_unaligned_be64(desc_buf));
+		break;
+	}
+
+	return ret;
+}
+
+#define UFS_DESC_PARAM(_name, _puname, _duname, _size)			\
+	static ssize_t _name##_show(struct device *dev, 			\
+		struct device_attribute *attr, char *buf)			\
+	{									\
+		struct ufs_hba *hba = dev_get_drvdata(dev); 		\
+		return ufs_sysfs_read_desc_param(hba, QUERY_DESC_IDN_##_duname, \
+			0, _duname##_DESC_PARAM##_puname, buf, _size);		\
+	}									\
+	static DEVICE_ATTR_RO(_name)
+
+#define UFS_HEALTH_DESC_PARAM(_name, _uname, _size)			\
+	UFS_DESC_PARAM(_name, _uname, HEALTH, _size)
+
+UFS_HEALTH_DESC_PARAM(len, _LEN, 1);
+UFS_HEALTH_DESC_PARAM(eol_info, _EOL_INFO, 1);
+UFS_HEALTH_DESC_PARAM(life_time_estimation_a, _LIFE_TIME_EST_A, 1);
+UFS_HEALTH_DESC_PARAM(life_time_estimation_b, _LIFE_TIME_EST_B, 1);
+
+static struct attribute *ufs_sysfs_health_descriptor[] = {
+	&dev_attr_len.attr,
+	&dev_attr_eol_info.attr,
+	&dev_attr_life_time_estimation_a.attr,
+	&dev_attr_life_time_estimation_b.attr,
+	NULL,
+};
+
+static const struct attribute_group ufs_sysfs_health_descriptor_group = {
+	.name = "health_descriptor",
+	.attrs = ufs_sysfs_health_descriptor,
+};
+
+#define UFS_POWER_DESC_PARAM(_name, _uname, _index)			\
+static ssize_t _name##_index##_show(struct device *dev,			\
+	struct device_attribute *attr, char *buf)			\
+{									\
+	struct ufs_hba *hba = dev_get_drvdata(dev);			\
+	return ufs_sysfs_read_desc_param(hba, QUERY_DESC_IDN_POWER, 0,	\
+		PWR_DESC##_uname##_0 + _index * 2, buf, 2);		\
+}									\
+static DEVICE_ATTR_RO(_name##_index)
+
+static const struct attribute_group *ufs_sysfs_groups[] = {
+	&ufs_sysfs_health_descriptor_group,
+	NULL,
+};
+
+void ufs_sysfs_add_nodes(struct device *dev)
+{
+	int ret;
+
+	ret = sysfs_create_groups(&dev->kobj, ufs_sysfs_groups);
+	if (ret)
+		dev_err(dev,"%s: sysfs groups creation failed (err = %d)\n", __func__, ret);
+}
+#endif
 /**
  * ufshcd_init - Driver initialization routine
  * @hba: per-adapter instance
@@ -11078,7 +11204,10 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 	ufsdbg_add_debugfs(hba);
 
 	ufshcd_add_sysfs_nodes(hba);
-
+#ifdef VENDOR_EDIT
+    //xiaofan.yang@PSW.TECH.Stability, 2019/03/15,Add for check storage endurance
+	ufs_sysfs_add_nodes(hba->dev);
+#endif
 	return 0;
 
 out_remove_scsi_host:

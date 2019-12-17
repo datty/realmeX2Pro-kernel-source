@@ -67,6 +67,27 @@ struct msm_rpmh_master_data {
 	enum master_pid pid;
 };
 
+//yangmingjin@BSP.POWER.Basic 2019/05/30 add for RM_TAG_POWER_DEBUG
+#ifdef VENDOR_EDIT
+#define PRINT_BUF_SIZE 640
+#define RPMH_PDC_SOC_SLEEP_REG_BASE 0x0b2e0300
+char print_buf[PRINT_BUF_SIZE];
+static void __iomem *rpmh_pdc_soc_sleep_base;
+static int sleep_status_bank0_offset =  0x10;
+static const struct msm_rpmh_master_data rm_rpmh_masters[] = {
+	{"APPS", -1, -1},
+	{"SP", -1, -1},
+	{"ADSP", ADSP, PID_ADSP},
+	{"SLPI", SLPI, PID_SLPI},
+	{"AOP", -1, -1},
+	{"DEBUG", -1, -1},
+	{"GPU", GPU, PID_GPU},
+	{"DISPLAY", DISPLAY, PID_DISPLAY},
+	{"MPSS", MPSS, PID_MPSS},
+	{"CDSP", CDSP, PID_CDSP},
+};
+#endif
+/*VENDOR_EDIT*/
 static const struct msm_rpmh_master_data rpmh_masters[] = {
 	{"MPSS", MPSS, PID_MPSS},
 	{"ADSP", ADSP, PID_ADSP},
@@ -114,7 +135,6 @@ static ssize_t msm_rpmh_master_stats_print_data(char *prvbuf, ssize_t length,
 		accumulated_duration +=
 				(arch_counter_get_cntvct()
 				- record->last_entered);
-
 	return snprintf(prvbuf, length, "%s\n\tVersion:0x%x\n"
 			"\tSleep Count:0x%x\n"
 			"\tSleep Last Entered At:0x%llx\n"
@@ -240,6 +260,14 @@ static int msm_rpmh_master_stats_probe(struct platform_device *pdev)
 		goto fail_iomap;
 	}
 
+//yangmingjin@BSP.POWER.Basic 2019/05/30 modify for RM_TAG_POWER_DEBUG
+#ifdef VENDOR_EDIT
+    rpmh_pdc_soc_sleep_base = devm_ioremap(&pdev->dev, RPMH_PDC_SOC_SLEEP_REG_BASE, 0x20);
+    if (!rpmh_pdc_soc_sleep_base) {
+        pr_err("Failed to get rpmh_pdc_soc_sleep_base\n");
+    }
+#endif
+/*VENDOR_EDIT*/
 	apss_master_stats.version_id = 0x1;
 	platform_set_drvdata(pdev, prvdata);
 	return ret;
@@ -283,6 +311,57 @@ static struct platform_driver msm_rpmh_master_stats_driver = {
 		.of_match_table = rpmh_master_table,
 	},
 };
+//yangmingjin@BSP.POWER.Basic 2019/05/30 add for RM_TAG_POWER_DEBUG
+#ifdef VENDOR_EDIT
+#define COUNTTOMS 19200 //19200000hz
+static void rm_rpmh_master_stats_print(char *buf)
+{
+	int i = 0;
+	size_t size = 0;
+	struct msm_rpmh_master_stats *record = NULL;
+	int count = 0, mask = 0, sleep = 0;
+	int rpmh_masters_size = ARRAY_SIZE(rm_rpmh_masters);
+	uint64_t masks = 0, sleep_stats = 0;
+
+	mutex_lock(&rpmh_stats_mutex);
+
+    if(NULL != rpmh_pdc_soc_sleep_base){
+        masks = readl_relaxed(rpmh_pdc_soc_sleep_base);
+        sleep_stats = readl_relaxed(rpmh_pdc_soc_sleep_base + sleep_status_bank0_offset);
+	    masks &= 0x3ff;
+	    sleep_stats &= 0x3ff;
+    }
+	count += snprintf(buf+count, PRINT_BUF_SIZE-count, "{name(cnt last_enterMs last_exitMs total_sleepMs mask|sleep(0x%llx|0x%llx)} ",
+		masks, sleep_stats);
+
+	for (i = 0; i < rpmh_masters_size; i++) {
+		mask = (masks & (1 << i)) ? 1 : 0;
+		sleep = (sleep_stats & (1 << i)) ? 1 : 0;
+		if((rm_rpmh_masters[i].smem_id != -1) || (i == 0)){
+			record = ((i == 0) ? &apss_master_stats :
+				(struct msm_rpmh_master_stats *)qcom_smem_get(rm_rpmh_masters[i].pid, rm_rpmh_masters[i].smem_id, &size));
+			if (!IS_ERR_OR_NULL(record) && (PRINT_BUF_SIZE-count > 0))
+				count += snprintf(buf+count, PRINT_BUF_SIZE-count,
+					"[%s(%d %lld %lld %lld %d|%d)] ", rm_rpmh_masters[i].master_name,
+					record->counts,record->last_entered/COUNTTOMS, record->last_exited/COUNTTOMS,
+					record->accumulated_duration/COUNTTOMS, mask, sleep);
+			else
+				count += snprintf(buf+count, PRINT_BUF_SIZE-count,
+					"[%s(%d %d %d %d %d|%d)] ", rm_rpmh_masters[i].master_name, -1, -1, -1, -1, mask, sleep);
+		}
+		else
+			count += snprintf(buf+count, PRINT_BUF_SIZE-count,
+				"[%s(%d %d %d %d %d|%d)] ", rm_rpmh_masters[i].master_name, -1, -1, -1, -1, mask, sleep);
+	}
+	mutex_unlock(&rpmh_stats_mutex);
+	buf[count] = '\0';
+	printk(KERN_INFO"[RM_POWER]rpm_master: %s\n", buf);
+}
+void rpm_master_stats_print(void){
+	 rm_rpmh_master_stats_print(print_buf);
+}
+#endif
+/*VENDOR_EDIT*/
 
 module_platform_driver(msm_rpmh_master_stats_driver);
 MODULE_LICENSE("GPL v2");

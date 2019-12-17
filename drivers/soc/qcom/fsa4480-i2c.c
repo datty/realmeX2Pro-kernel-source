@@ -17,7 +17,12 @@
 #include <linux/i2c.h>
 #include <linux/mutex.h>
 #include <linux/soc/qcom/fsa4480-i2c.h>
-
+#ifdef VENDOR_EDIT
+/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/20,
+ * Add for fsa4480 headset detection interrupt. */
+#include <linux/of_gpio.h>
+#include <linux/gpio.h>
+#endif /* VENDOR_EDIT */
 #define FSA4480_I2C_NAME	"fsa4480-driver"
 
 #define FSA4480_SWITCH_SETTINGS 0x04
@@ -33,6 +38,11 @@
 #define FSA4480_DELAY_L_SENSE   0x0F
 #define FSA4480_DELAY_L_AGND    0x10
 #define FSA4480_RESET           0x1E
+#ifdef VENDOR_EDIT
+/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/29,
+ * Set current source to smallest 100uA */
+#define FSA4480_SOURCE_SETTING  0x1F
+#endif /* VENDOR_EDIT */
 
 struct fsa4480_priv {
 	struct regmap *regmap;
@@ -43,6 +53,11 @@ struct fsa4480_priv {
 	struct work_struct usbc_analog_work;
 	struct blocking_notifier_head fsa4480_notifier;
 	struct mutex notification_lock;
+	#ifdef VENDOR_EDIT
+	/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/20,
+	* Add for fsa4480 headset detection interrupt. */
+	s32 hs_det_pin;
+	#endif /* VENDOR_EDIT */
 };
 
 struct fsa4480_reg_val {
@@ -57,8 +72,15 @@ static const struct regmap_config fsa4480_regmap_config = {
 };
 
 static const struct fsa4480_reg_val fsa_reg_i2c_defaults[] = {
+	#ifndef VENDOR_EDIT
+	/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/29,
+	 * Set L/R slow turn on 2000us */
 	{FSA4480_SLOW_L, 0x00},
 	{FSA4480_SLOW_R, 0x00},
+	#else
+	{FSA4480_SLOW_L, 0x13},
+	{FSA4480_SLOW_R, 0x13},
+	#endif /* VENDOR_EDIT */
 	{FSA4480_SLOW_MIC, 0x00},
 	{FSA4480_SLOW_SENSE, 0x00},
 	{FSA4480_SLOW_GND, 0x00},
@@ -67,6 +89,11 @@ static const struct fsa4480_reg_val fsa_reg_i2c_defaults[] = {
 	{FSA4480_DELAY_L_SENSE, 0x00},
 	{FSA4480_DELAY_L_AGND, 0x09},
 	{FSA4480_SWITCH_SETTINGS, 0x98},
+	#ifdef VENDOR_EDIT
+	/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/29,
+	 * Set current source to smallest 100uA */
+	{FSA4480_SOURCE_SETTING, 0x01},
+	#endif /* VENDOR_EDIT */
 };
 
 static void fsa4480_usbc_update_settings(struct fsa4480_priv *fsa_priv,
@@ -76,6 +103,11 @@ static void fsa4480_usbc_update_settings(struct fsa4480_priv *fsa_priv,
 		dev_err(fsa_priv->dev, "%s: regmap invalid\n", __func__);
 		return;
 	}
+	#ifdef VENDOR_EDIT
+	/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/29, Add log */
+	dev_err(fsa_priv->dev, "%s: set reg(0x04) = 0x%x, reg(0x05) = 0x%x,\n",
+		__func__, switch_enable, switch_control);
+	#endif /* VENDOR_EDIT */
 
 	regmap_write(fsa_priv->regmap, FSA4480_SWITCH_SETTINGS, 0x80);
 	regmap_write(fsa_priv->regmap, FSA4480_SWITCH_CONTROL, switch_control);
@@ -112,9 +144,16 @@ static int fsa4480_usbc_event_changed(struct notifier_block *nb,
 		return ret;
 	}
 
+	#ifndef VENDOR_EDIT
+	/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/29, Add log */
 	dev_dbg(dev, "%s: USB change event received, supply mode %d, usbc mode %d, expected %d\n",
 		__func__, mode.intval, fsa_priv->usbc_mode.counter,
 		POWER_SUPPLY_TYPEC_SINK_AUDIO_ADAPTER);
+	#else
+	dev_err(dev, "%s: USB change event received, supply mode %d, usbc mode %d, expected %d\n",
+		__func__, mode.intval, fsa_priv->usbc_mode.counter,
+		POWER_SUPPLY_TYPEC_SINK_AUDIO_ADAPTER);
+	#endif /* VENDOR_EDIT */
 
 	switch (mode.intval) {
 	case POWER_SUPPLY_TYPEC_SINK_AUDIO_ADAPTER:
@@ -158,17 +197,37 @@ static int fsa4480_usbc_analog_setup_switches(struct fsa4480_priv *fsa_priv)
 	dev_dbg(dev, "%s: setting GPIOs active = %d\n",
 		__func__, mode.intval != POWER_SUPPLY_TYPEC_NONE);
 
+	#ifdef VENDOR_EDIT
+	/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/29, Add log */
+	dev_err(dev, "%s: USB mode %d\n", __func__, mode.intval);
+	#endif /* VENDOR_EDIT */
+
 	switch (mode.intval) {
 	/* add all modes FSA should notify for in here */
 	case POWER_SUPPLY_TYPEC_SINK_AUDIO_ADAPTER:
+		#ifndef VENDOR_EDIT
+		/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/29 *
+		 * Disconnect L and R to reduce POP */
 		/* activate switches */
 		fsa4480_usbc_update_settings(fsa_priv, 0x00, 0x9F);
-
+		#else
+		fsa4480_usbc_update_settings(fsa_priv, 0x00, 0x87);
+		#endif /* VENDOR_EDIT */
 		/* notify call chain on event */
 		blocking_notifier_call_chain(&fsa_priv->fsa4480_notifier,
 		mode.intval, NULL);
+		#ifdef VENDOR_EDIT
+		/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/20,
+		* Add for fsa4480 headset detection interrupt. */
+		gpio_direction_output(fsa_priv->hs_det_pin, 0);
+		#endif /* VENDOR_EDIT */
 		break;
 	case POWER_SUPPLY_TYPEC_NONE:
+		#ifdef VENDOR_EDIT
+		/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/20,
+		* Add for fsa4480 headset detection interrupt. */
+		gpio_direction_output(fsa_priv->hs_det_pin, 1);
+		#endif /* VENDOR_EDIT */
 		/* notify call chain on event */
 		blocking_notifier_call_chain(&fsa_priv->fsa4480_notifier,
 				POWER_SUPPLY_TYPEC_NONE, NULL);
@@ -290,15 +349,36 @@ int fsa4480_switch_event(struct device_node *node,
 	if (!fsa_priv->regmap)
 		return -EINVAL;
 
+	#ifdef VENDOR_EDIT
+	/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/29, Add log */
+	pr_err("%s - switch event: %d\n", __func__, event);
+	#endif /* VENDOR_EDIT */
+
 	switch (event) {
 	case FSA_MIC_GND_SWAP:
+		#ifdef VENDOR_EDIT
+		/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/29 *
+		 * Disconnect L and R to reduce POP */
+		regmap_write(fsa_priv->regmap, FSA4480_SWITCH_SETTINGS, 0x87);
+		usleep_range(210, 215);
+		#endif /* VENDOR_EDIT */
 		regmap_read(fsa_priv->regmap, FSA4480_SWITCH_CONTROL,
 				&switch_control);
 		if ((switch_control & 0x07) == 0x07)
 			switch_control = 0x0;
 		else
 			switch_control = 0x7;
+
+		#ifndef VENDOR_EDIT
+		/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/29 *
+		 * Disconnect L and R to reduce POP */
 		fsa4480_usbc_update_settings(fsa_priv, switch_control, 0x9F);
+		#else
+		//swap Mic and Gnd, then connect L and R.
+		regmap_write(fsa_priv->regmap, FSA4480_SWITCH_CONTROL, switch_control);
+		usleep_range(110, 115);
+		regmap_write(fsa_priv->regmap, FSA4480_SWITCH_SETTINGS, 0x9F);
+		#endif /* VENDOR_EDIT */
 		break;
 	case FSA_USBC_ORIENTATION_CC1:
 		fsa4480_usbc_update_settings(fsa_priv, 0x18, 0xF8);
@@ -316,6 +396,60 @@ int fsa4480_switch_event(struct device_node *node,
 	return 0;
 }
 EXPORT_SYMBOL(fsa4480_switch_event);
+
+#ifdef VENDOR_EDIT
+/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/29 *
+ * Control to connect L and R to reduce POP */
+int fsa4480_set_LR_cnt(struct device_node *node, bool state)
+{
+	struct i2c_client *client = of_find_i2c_device_by_node(node);
+	struct fsa4480_priv *fsa_priv;
+
+	if (!client)
+		return -EINVAL;
+
+	fsa_priv = (struct fsa4480_priv *)i2c_get_clientdata(client);
+	if (!fsa_priv)
+		return -EINVAL;
+	if (!fsa_priv->regmap)
+		return -EINVAL;
+
+	pr_err("%s - state = %d\n", __func__, state);
+	if(true == state) {
+		regmap_write(fsa_priv->regmap, FSA4480_SWITCH_SETTINGS, 0x9F);
+	} else {
+		regmap_write(fsa_priv->regmap, FSA4480_SWITCH_SETTINGS, 0x87);
+	}
+
+	return 0;
+}
+
+
+EXPORT_SYMBOL(fsa4480_set_LR_cnt);
+#endif /* VENDOR_EDIT */
+
+#ifdef VENDOR_EDIT
+/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/20,
+* Add for fsa4480 headset detection interrupt. */
+static int fsa4480_parse_dt(struct fsa4480_priv *fsa_priv,
+	struct device *dev)
+{
+    struct device_node *dNode = dev->of_node;
+    int ret;
+    if (dNode == NULL)
+        return -ENODEV;
+
+	fsa_priv->hs_det_pin = of_get_named_gpio(dNode,
+	        "fsa4480,hs-det-gpio", 0);
+	if (fsa_priv->hs_det_pin < 0) {
+	    pr_err("%s - get int error\n", __func__);
+	    return -ENODEV;
+	}
+	ret = gpio_request(fsa_priv->hs_det_pin, "fsa4480_hs_det");
+	gpio_direction_output(fsa_priv->hs_det_pin, 1);
+	return ret;
+}
+#endif /* VENDOR_EDIT */
 
 static void fsa4480_usbc_analog_work_fn(struct work_struct *work)
 {
@@ -351,6 +485,16 @@ static int fsa4480_probe(struct i2c_client *i2c,
 		return -ENOMEM;
 
 	fsa_priv->dev = &i2c->dev;
+	#ifdef VENDOR_EDIT
+	/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/20,
+	* Add for fsa4480 headset detection interrupt. */
+	rc = fsa4480_parse_dt(fsa_priv, &i2c->dev);
+	if (rc < 0) {
+	    dev_err(fsa_priv->dev, "%s: of_node error: %d\n",
+	            __func__, rc);
+	    goto err_of_node;
+	}
+	#endif /* VENDOR_EDIT */
 
 	fsa_priv->usb_psy = power_supply_get_by_name("usb");
 	if (!fsa_priv->usb_psy) {
@@ -400,6 +544,12 @@ static int fsa4480_probe(struct i2c_client *i2c,
 err_supply:
 	power_supply_put(fsa_priv->usb_psy);
 err_data:
+#ifdef VENDOR_EDIT
+/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/20,
+* Add for fsa4480 headset detection interrupt. */
+    gpio_free(fsa_priv->hs_det_pin);
+err_of_node:
+#endif /* VENDOR_EDIT */
 	devm_kfree(&i2c->dev, fsa_priv);
 	return rc;
 }

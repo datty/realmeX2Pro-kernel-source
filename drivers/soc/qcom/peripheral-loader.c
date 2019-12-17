@@ -43,6 +43,11 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/trace_msm_pil_event.h>
 
+#ifdef VENDOR_EDIT
+//GaoTing.Gan@PSW.MultiMedia.MediaServer, 2019/03/06, Add for record vnus ramdump
+#include <soc/oppo/oppo_kevent_feedback.h>
+#endif /* VENDOR_EDIT */
+
 #include "peripheral-loader.h"
 
 #define pil_err(desc, fmt, ...)						\
@@ -432,6 +437,29 @@ static void print_aux_minidump_tocs(struct pil_desc *desc)
 	}
 }
 
+#ifdef VENDOR_EDIT
+//GaoTing.Gan@PSW.MultiMedia.MediaServer, 2019/03/06, Add for record ramdump
+//Wentiam.Mai@PSW.NW.EM.1213568, 2018/05/09
+//Add for customized subsystem ramdump
+#define CAUSENAME_SIZE 128
+unsigned int BKDRHash(char* str, unsigned int len)
+{
+    unsigned int seed = 131; /* 31 131 1313 13131 131313 etc.. */
+    unsigned int hash = 0;
+    unsigned int i    = 0;
+
+    if (str == NULL) {
+        return 0;
+    }
+
+    for(i = 0; i < len; str++, i++) {
+        hash = (hash * seed) + (*str);
+    }
+
+    return hash;
+}
+#endif /*VENDOR_EDIT*/
+
 /**
  * pil_do_ramdump() - Ramdump an image
  * @desc: descriptor from pil_desc_init()
@@ -448,7 +476,9 @@ int pil_do_ramdump(struct pil_desc *desc,
 	struct pil_seg *seg;
 	int count = 0, ret;
 
+
 	if (desc->minidump_ss) {
+
 		pr_debug("Minidump : md_ss_toc->md_ss_toc_init is 0x%x\n",
 			(unsigned int)desc->minidump_ss->md_ss_toc_init);
 		pr_debug("Minidump : md_ss_toc->md_ss_enable_status is 0x%x\n",
@@ -477,6 +507,7 @@ int pil_do_ramdump(struct pil_desc *desc,
 					desc->name);
 				return pil_do_minidump(desc, minidump_dev);
 			}
+
 			pr_debug("Minidump aborted for %s\n", desc->name);
 			return -EINVAL;
 		}
@@ -506,6 +537,7 @@ int pil_do_ramdump(struct pil_desc *desc,
 	if (ret)
 		pil_err(desc, "%s: Ramdump collection failed for subsys %s rc:%d\n",
 				__func__, desc->name, ret);
+
 
 	if (desc->subsys_vmid > 0)
 		ret = pil_assign_mem_to_subsys(desc, priv->region_start,

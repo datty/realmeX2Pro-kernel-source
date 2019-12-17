@@ -307,6 +307,11 @@ qpnp_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 		return -EINVAL;
 	}
 
+	#ifdef VENDOR_EDIT
+	//Wanghao@BSP.TP.Function 2019/05/24 add for get rtc alarm set info
+	pr_err("----------qpnp_rtc_set_alarm secs=%ld  secs_rtc=%ld diff=%ld\n",secs, secs_rtc, secs - secs_rtc);
+	#endif
+
 	value[0] = secs & 0xFF;
 	value[1] = (secs >> 8) & 0xFF;
 	value[2] = (secs >> 16) & 0xFF;
@@ -483,6 +488,11 @@ static int qpnp_rtc_probe(struct platform_device *pdev)
 	const struct rtc_class_ops *rtc_ops = &qpnp_rtc_ro_ops;
 	int rc;
 	u8 subtype;
+	#ifdef VENDOR_EDIT
+	//Wanghao@BSP.TP.Function 2019/05/24 add for get rtc alarm set info
+	u8 value[4];
+	unsigned long secs_alarm = 0, secs_rtc = 0;
+	#endif
 	struct qpnp_rtc *rtc_dd;
 	unsigned int base;
 	struct device_node *child;
@@ -621,6 +631,30 @@ static int qpnp_rtc_probe(struct platform_device *pdev)
 	enable_irq_wake(rtc_dd->rtc_alarm_irq);
 
 	dev_dbg(&pdev->dev, "Probe success !!\n");
+
+	#ifdef VENDOR_EDIT
+	//Wanghao@BSP.TP.Function 2019/05/24 add for get rtc alarm set info
+	//get alarm info
+	rc = qpnp_read_wrapper(rtc_dd, value,
+				rtc_dd->alarm_base + REG_OFFSET_ALARM_RW,
+				NUM_8_BIT_RTC_REGS);
+	if (rc) {
+		pr_err("Read from ALARM reg failed\n");
+	} else {
+		secs_alarm = TO_SECS(value);
+	}
+
+	//get rtc_base
+	rc = qpnp_read_wrapper(rtc_dd, value,
+				rtc_dd->rtc_base + REG_OFFSET_RTC_READ,
+				NUM_8_BIT_RTC_REGS);
+	if (rc) {
+		pr_err("Read from RTC reg failed\n");
+	} else {
+		secs_rtc = TO_SECS(value);
+	}
+	pr_err("----------%s secs_alarm is %lu, secs_rtc is %lu\n", __func__, secs_alarm, secs_rtc);
+	#endif
 
 	return 0;
 

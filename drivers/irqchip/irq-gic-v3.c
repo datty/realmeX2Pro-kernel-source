@@ -41,6 +41,10 @@
 #include <asm/virt.h>
 
 #include <linux/syscore_ops.h>
+#ifdef VENDOR_EDIT
+//Nanwei.Deng@BSP.Power.Basic 2018/06/14 add formodem irq, ,case03529649
+#include <linux/wakeup_reason.h>
+#endif
 
 #include "irq-gic-common.h"
 
@@ -339,7 +343,11 @@ static int gic_suspend(void)
 {
 	return 0;
 }
-
+//yangmingjin@BSP.POWER.Basic 2019/05/30 add for RM_TAG_POWER_DEBUG
+#ifdef VENDOR_EDIT
+extern void set_ipc_router_debug_mask(int ipc_router_debug_mask);
+#endif
+/* VENDOR_EDIT */
 static void gic_show_resume_irq(struct gic_chip_data *gic)
 {
 	unsigned int i;
@@ -349,6 +357,11 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 
 	if (!msm_show_resume_irq_mask)
 		return;
+//yangmingjin@BSP.POWER.Basic 2019/05/30 add for RM_TAG_POWER_DEBUG
+#ifdef VENDOR_EDIT
+        set_ipc_router_debug_mask(1);
+#endif
+/* VENDOR_EDIT */
 
 	for (i = 0; i * 32 < gic->irq_nr; i++) {
 		enabled = readl_relaxed(base + GICD_ICENABLER + i * 4);
@@ -411,6 +424,16 @@ static u64 gic_mpidr_to_affinity(unsigned long mpidr)
 static asmlinkage void __exception_irq_entry gic_handle_irq(struct pt_regs *regs)
 {
 	u32 irqnr;
+#if defined(VENDOR_EDIT) && defined(CONFIG_PROCESS_RECLAIM) && defined(CONFIG_OPPO_SPECIAL_BUILD)
+	/* Kui.Zhang@PSW.TEC.Kernel.Performance, 2019/02/27
+	 * collect interrupt doing time during process reclaim, only effect in age test
+	 */
+	struct task_struct *task = current;
+	unsigned long long start_ns = 0;
+
+	if (task && (task->flags & PF_RECLAIM_SHRINK))
+		start_ns = sched_clock();
+#endif
 
 	do {
 		irqnr = gic_read_iar();
@@ -456,6 +479,14 @@ static asmlinkage void __exception_irq_entry gic_handle_irq(struct pt_regs *regs
 			continue;
 		}
 	} while (irqnr != ICC_IAR1_EL1_SPURIOUS);
+
+#if defined(VENDOR_EDIT) && defined(CONFIG_PROCESS_RECLAIM) && defined(CONFIG_OPPO_SPECIAL_BUILD)
+	/* Kui.Zhang@PSW.TEC.Kernel.Performance, 2019/02/27
+	 * collect interrupt doing time during process reclaim, only effect in age test
+	 */
+	if ((task == current) && (task->flags & PF_RECLAIM_SHRINK))
+		task->reclaim_intr_ns += (unsigned long)(sched_clock() - start_ns);
+#endif
 }
 
 static void __init gic_dist_init(void)
@@ -552,10 +583,18 @@ static int __gic_populate_rdist(struct redist_region *region, void __iomem *ptr)
 		gic_data_rdist_rd_base() = ptr;
 		gic_data_rdist()->phys_base = region->phys_base + offset;
 
+#ifndef VENDOR_EDIT
+		//Nanwei.Deng@BSP.power.Basic 2018/05/01 
 		pr_info("CPU%d: found redistributor %lx region %d:%pa\n",
 			smp_processor_id(), mpidr,
 			(int)(region - gic_data.redist_regions),
 			&gic_data_rdist()->phys_base);
+#else
+		pr_debug("CPU%d: found redistributor %lx region %d:%pa\n",
+			smp_processor_id(), mpidr,
+			(int)(region - gic_data.redist_regions),
+			&gic_data_rdist()->phys_base);
+#endif		
 		return 0;
 	}
 

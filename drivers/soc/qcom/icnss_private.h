@@ -360,9 +360,9 @@ struct icnss_priv {
 	uint32_t fw_early_crash_irq;
 	struct completion unblock_shutdown;
 	char function_name[WLFW_FUNCTION_NAME_LEN + 1];
-	bool is_ssr;
 	struct kobject *icnss_kobject;
 	atomic_t is_shutdown;
+	bool is_ssr;
 };
 
 int icnss_call_driver_uevent(struct icnss_priv *priv,

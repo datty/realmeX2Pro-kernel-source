@@ -234,7 +234,8 @@ static int __mhi_close(struct diag_mhi_info *mhi_info, int close_flag)
 	cancel_work(&mhi_info->read_work);
 	cancel_work(&mhi_info->read_done_work);
 	flush_workqueue(mhi_info->mhi_wq);
-
+	cancel_work(&mhi_info->read_work);
+	cancel_work(&mhi_info->read_done_work);
 	if (close_flag == CLOSE_CHANNELS) {
 		mutex_lock(&mhi_info->ch_mutex);
 		mhi_unprepare_from_transfer(mhi_info->mhi_dev);

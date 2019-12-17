@@ -134,5 +134,8 @@ obj-$(CONFIG_REGULATOR_RPM_SMD) += rpm-smd-regulator.o
 obj-$(CONFIG_REGULATOR_SPM) += spm-regulator.o
 obj-$(CONFIG_REGULATOR_RPMH) += rpmh-regulator.o
 obj-$(CONFIG_REGULATOR_STUB) += stub-regulator.o
-
+#ifdef VENDOR_EDIT
+#zhixian.Mai@camera, 2019/06/16, Add for pm8008 driver
+obj-y += qcom_pm8008-regulator.o
+#endif
 ccflags-$(CONFIG_REGULATOR_DEBUG) += -DDEBUG
