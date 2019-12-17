@@ -24,6 +24,16 @@ dts-dirs += sprd
 dts-dirs += xilinx
 dts-dirs += lg
 dts-dirs += zte
+dts-dirs += 18115
+dts-dirs += 18501
+dts-dirs += 18503
+dts-dirs += 18119
+dts-dirs += 19071
+dts-dirs += 19081
+dts-dirs += 19053
+dts-dirs += 19371
+dts-dirs += 19781
+dts-dirs += 19688
 
 subdir-y	:= $(dts-dirs)
 
