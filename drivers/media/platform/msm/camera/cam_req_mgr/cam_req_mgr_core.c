@@ -2270,6 +2270,7 @@ static int cam_req_mgr_process_trigger(void *priv, void *data)
 
 	mutex_lock(&link->req.lock);
 
+#ifndef VENDOR_EDIT
 	if (trigger_data->trigger == CAM_TRIGGER_POINT_SOF) {
 		idx = __cam_req_mgr_find_slot_for_req(in_q,
 			trigger_data->req_id);
@@ -2279,7 +2280,7 @@ static int cam_req_mgr_process_trigger(void *priv, void *data)
 			__cam_req_mgr_reset_req_slot(link, idx);
 		}
 	}
-
+#endif
 	/*
 	 * Check if current read index is in applied state, if yes make it free
 	 *    and increment read index to next slot.
