@@ -547,6 +547,7 @@ static void diag_rpmsg_close_work_fn(struct work_struct *work)
 	if (!rpmsg_info->inited || !rpmsg_info->hdl) {
 		mutex_unlock(&driver->rpmsginfo_mutex[PERI_RPMSG]);
 		return;
+        }
 	rpmsg_info->hdl = NULL;
 	mutex_unlock(&driver->rpmsginfo_mutex[PERI_RPMSG]);
 	diagfwd_channel_close(rpmsg_info->fwd_ctxt);
