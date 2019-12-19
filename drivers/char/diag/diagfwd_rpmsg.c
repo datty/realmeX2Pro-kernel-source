@@ -525,6 +525,7 @@ static void diag_rpmsg_open_work_fn(struct work_struct *work)
 	if (!rpmsg_info->inited) {
 		mutex_unlock(&driver->rpmsginfo_mutex[PERI_RPMSG]);
 		return;
+	}
 	if (rpmsg_info->type != TYPE_CNTL) {
 		diagfwd_channel_open(rpmsg_info->fwd_ctxt);
 		diagfwd_late_open(rpmsg_info->fwd_ctxt);
