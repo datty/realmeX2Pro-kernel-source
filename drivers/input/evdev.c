@@ -28,6 +28,11 @@
 #include <linux/cdev.h>
 #include "input-compat.h"
 
+#ifdef VENDOR_EDIT
+#define CREATE_TRACE_POINTS
+#include "evdev_trace.h"
+#endif
+
 enum evdev_clock_type {
 	EV_CLK_REAL = 0,
 	EV_CLK_MONO,
@@ -613,6 +618,9 @@ static ssize_t evdev_read(struct file *file, char __user *buffer,
 		while (read + input_event_size() <= count &&
 		       evdev_fetch_next_event(client, &event)) {
 
+			#ifdef VENDOR_EDIT
+			trace_evdev(__FUNCTION__, event.type, event.code, event.value);
+			#endif
 			if (input_event_to_user(buffer + read, &event))
 				return -EFAULT;
 

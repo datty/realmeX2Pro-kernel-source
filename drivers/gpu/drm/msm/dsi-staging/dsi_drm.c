@@ -384,7 +384,10 @@ static bool dsi_bridge_mode_fixup(struct drm_bridge *bridge,
 		if (rc) {
 			pr_err("[%s] seamless mode mismatch failure rc=%d\n",
 				c_bridge->display->name, rc);
+			#ifndef VENDOR_EDIT
+			/*liping-m@PSW.MM.Display.LCD,2019/6/20,for 90FPS LCD */
 			return false;
+			#endif /* VENDOR_EDIT*/
 		}
 
 		cur_mode = crtc_state->crtc->mode;

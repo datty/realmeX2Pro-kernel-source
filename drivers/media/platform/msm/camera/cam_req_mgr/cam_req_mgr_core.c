@@ -351,14 +351,24 @@ static void __cam_req_mgr_reset_req_slot(struct cam_req_mgr_core_link *link,
 	struct cam_req_mgr_req_queue *in_q = link->req.in_q;
 
 	slot = &in_q->slot[idx];
+
+#ifndef VENDOR_EDIT
+/* jiangyi1@Camera.drv, 20190827, GSI testReprocessAbort */
 	CAM_DBG(CAM_CRM, "RESET: last applied idx %d: idx %d: slot->status %d",
 			in_q->last_applied_idx, idx, slot->status);
+#endif
 
 	/* Check if CSL has already pushed new request*/
+#ifndef VENDOR_EDIT
+/* jiangyi1@Camera.drv, 20190827, GSI testReprocessAbort */
 	if (slot->status == CRM_SLOT_STATUS_REQ_ADDED ||
 		in_q->last_applied_idx == idx ||
 		idx < 0)
 		return;
+#else
+	if (slot->status == CRM_SLOT_STATUS_REQ_ADDED)
+		return;
+#endif
 
 	/* Reset input queue slot */
 	slot->req_id = -1;
@@ -1005,7 +1015,7 @@ static int __cam_req_mgr_check_sync_req_is_ready(
 	sync_slot_idx = __cam_req_mgr_find_slot_for_req(
 		sync_link->req.in_q, req_id);
 	if (sync_slot_idx == -1) {
-		CAM_DBG(CAM_CRM, "Req: %lld not found on link: %x [other link]",
+		CAM_ERR(CAM_CRM, "Req: %lld not found on link: %x [other link]",
 			req_id, sync_link->link_hdl);
 		sync_ready = false;
 		return -EAGAIN;
@@ -1149,7 +1159,11 @@ static int __cam_req_mgr_check_sync_req_is_ready(
 static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 	struct cam_req_mgr_trigger_notify *trigger_data)
 {
+#ifndef VENDOR_EDIT
 	int                                  rc = 0, idx, last_app_idx;
+#else
+	int                                  rc = 0, idx;
+#endif
 	int                                  reset_step = 0;
 	uint32_t                             trigger = trigger_data->trigger;
 	struct cam_req_mgr_slot             *slot = NULL;
@@ -1308,11 +1322,13 @@ static int __cam_req_mgr_process_req(struct cam_req_mgr_core_link *link,
 			 * the bubbled request which has already been reset by
 			 * CRM. Below code retains the last applied request.
 			 */
-
+#ifndef VENDOR_EDIT
+/* jiangyi1@Camera.drv, 20190827, GSI testReprocessAbort */
 			if (slot->req_id > 0) {
 				last_app_idx = in_q->last_applied_idx;
 				in_q->last_applied_idx = idx;
 			}
+#endif
 
 			__cam_req_mgr_dec_idx(
 				&idx, reset_step + 1,

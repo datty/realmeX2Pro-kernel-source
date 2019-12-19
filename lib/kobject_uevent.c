@@ -417,12 +417,20 @@ int kobject_uevent_env(struct kobject *kobj, enum kobject_action action,
 				goto exit;
 		}
 	}
-
+	//#ifdef  VENDOR_EDIT
+	// add by huangtongfeng for debug digital headset
+    if(!strcmp(subsystem,"usb"))
+    {
+		pr_err("kobject: '%s' (%p): %s: %s: %s "
+			 "%d\n", kobject_name(kobj), kobj,
+			 env->buf,devpath,subsystem, retval);
+    }
+	//#endif
 	/* let the kset specific function add its stuff */
 	if (uevent_ops && uevent_ops->uevent) {
 		retval = uevent_ops->uevent(kset, kobj, env);
 		if (retval) {
-			pr_debug("kobject: '%s' (%p): %s: uevent() returned "
+			pr_err("kobject: '%s' (%p): %s: uevent() returned "
 				 "%d\n", kobject_name(kobj), kobj,
 				 __func__, retval);
 			goto exit;

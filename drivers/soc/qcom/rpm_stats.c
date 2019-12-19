@@ -76,6 +76,7 @@ static inline u64 get_time_in_sec(u64 counter)
 	return counter;
 }
 
+#ifndef VENDOR_EDIT //yunqing.zeng@bsp.power.basic 20190702 Modify for log info more accurate
 static inline u64 get_time_in_msec(u64 counter)
 {
 	do_div(counter, MSM_ARCH_TIMER_FREQ);
@@ -83,6 +84,14 @@ static inline u64 get_time_in_msec(u64 counter)
 
 	return counter;
 }
+#else
+static inline u64 get_time_in_msec(u64 counter)
+{
+	do_div(counter, (MSM_ARCH_TIMER_FREQ/MSEC_PER_SEC));
+	return counter;
+}
+#endif
+
 
 static inline int msm_rpmstats_append_data_to_buf(char *buf,
 		struct msm_rpm_stats_data *data, int buflength)
@@ -91,7 +100,6 @@ static inline int msm_rpmstats_append_data_to_buf(char *buf,
 	u64 time_in_last_mode;
 	u64 time_since_last_mode;
 	u64 actual_last_sleep;
-
 	stat_type[4] = 0;
 	memcpy(stat_type, &data->stat_type, sizeof(u32));
 

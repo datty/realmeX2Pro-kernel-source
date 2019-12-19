@@ -461,6 +461,9 @@ static void qmi_handle_net_reset(struct qmi_handle *qmi)
 	/* Already qmi_handle_release() started */
 	if (!qmi->sock) {
 		sock_release(sock);
+#ifdef VENDOR_EDIT /* yanghao@PSW.Kernel Stability for the mutex unlock not call problem CR2463072 */
+		mutex_unlock(&qmi->sock_lock);
+#endif
 		return;
 	}
 	sock_release(qmi->sock);

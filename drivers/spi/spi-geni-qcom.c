@@ -1161,6 +1161,7 @@ static int spi_geni_transfer_one(struct spi_master *spi,
 		return -EINVAL;
 	}
 
+	GENI_SE_DBG(mas->ipc, false, mas->dev,"before Xfer[len %d tx %pK rx %pK n %d] timed out.\n",xfer->len, xfer->tx_buf,xfer->rx_buf,xfer->bits_per_word);
 	if (mas->cur_xfer_mode != GSI_DMA) {
 		reinit_completion(&mas->xfer_done);
 		setup_fifo_xfer(xfer, mas, slv->mode, spi);
@@ -1234,6 +1235,7 @@ static int spi_geni_transfer_one(struct spi_master *spi,
 			}
 		}
 	}
+	GENI_SE_DBG(mas->ipc, false, mas->dev,"xfer done\n");
 	return ret;
 err_gsi_geni_transfer_one:
 	geni_se_dump_dbg_regs(&mas->spi_rsc, mas->base, mas->ipc);
@@ -1299,6 +1301,11 @@ static void geni_spi_handle_tx(struct spi_geni_master *mas)
 	}
 }
 
+#ifdef VENDOR_EDIT
+//Zhenjian Jiang@BSP.Kernel.Stability, 2019/04/29, add for debug spi rx_buf corruption issue
+static int debug_spi_count = 0;
+static u64 debug_rx_addr[5];
+#endif
 static void geni_spi_handle_rx(struct spi_geni_master *mas)
 {
 	int i = 0;
@@ -1310,6 +1317,12 @@ static void geni_spi_handle_rx(struct spi_geni_master *mas)
 
 	if (!mas->cur_xfer)
 		return;
+
+#ifdef VENDOR_EDIT
+//Zhenjian Jiang@BSP.Kernel.Stability, 2019/04/29, add for debug spi rx_buf corruption issue
+	debug_rx_addr[debug_spi_count%5] = (u64)mas->cur_xfer->rx_buf;
+	debug_spi_count++;
+#endif
 
 	rx_buf = mas->cur_xfer->rx_buf;
 	rx_wc = (rx_fifo_status & RX_FIFO_WC_MSK);
@@ -1329,6 +1342,7 @@ static void geni_spi_handle_rx(struct spi_geni_master *mas)
 			((mas->cur_word_len / BITS_PER_BYTE) + 1);
 	rx_bytes = min_t(int, mas->rx_rem_bytes, rx_bytes);
 	rx_buf += (mas->cur_xfer->len - mas->rx_rem_bytes);
+	GENI_SE_DBG(mas->ipc, false, mas->dev,"%s: rem_bytes = %d rx_buff = 0x%pk\n", __func__, mas->rx_rem_bytes, rx_buf);
 	while (i < rx_bytes) {
 		u32 fifo_word = 0;
 		u8 *fifo_byte;
@@ -1346,6 +1360,7 @@ static void geni_spi_handle_rx(struct spi_geni_master *mas)
 			rx_buf[i++] = fifo_byte[j];
 	}
 	mas->rx_rem_bytes -= rx_bytes;
+	GENI_SE_DBG(mas->ipc, false, mas->dev,"%s: rem_bytes = %d rx_buff = 0x%pk\n", __func__, mas->rx_rem_bytes, rx_buf);
 }
 
 static irqreturn_t geni_spi_irq(int irq, void *data)
@@ -1359,6 +1374,7 @@ static irqreturn_t geni_spi_irq(int irq, void *data)
 		goto exit_geni_spi_irq;
 	}
 	m_irq = geni_read_reg(mas->base, SE_GENI_M_IRQ_STATUS);
+	GENI_SE_DBG(mas->ipc, false, mas->dev,"%s: %d m_irq = 0x%x cmd_done = %d\n", __func__, __LINE__, m_irq, mas->cmd_done);
 	if (mas->cur_xfer_mode == FIFO_MODE) {
 		if ((m_irq & M_RX_FIFO_WATERMARK_EN) ||
 						(m_irq & M_RX_FIFO_LAST_EN))
@@ -1419,6 +1435,7 @@ exit_geni_spi_irq:
 		mas->cmd_done = false;
 		complete(&mas->xfer_done);
 	}
+	GENI_SE_DBG(mas->ipc, false, mas->dev,"%s: %d m_irq = 0x%x cmd_done = %d\n", __func__, __LINE__, m_irq, mas->cmd_done);
 	return IRQ_HANDLED;
 }
 
@@ -1673,6 +1690,9 @@ static int spi_geni_suspend(struct device *dev)
 {
 	int ret = 0;
 
+	struct spi_master *spi_1 = get_spi_master(dev);
+	struct spi_geni_master *geni_mas_1 = spi_master_get_devdata(spi_1);
+	GENI_SE_DBG(geni_mas_1->ipc, false, geni_mas_1->dev,"%s\n",__func__);
 	if (!pm_runtime_status_suspended(dev)) {
 		struct spi_master *spi = get_spi_master(dev);
 		struct spi_geni_master *geni_mas = spi_master_get_devdata(spi);
@@ -1708,6 +1728,9 @@ static int spi_geni_runtime_resume(struct device *dev)
 
 static int spi_geni_resume(struct device *dev)
 {
+	struct spi_master *spi_1 = get_spi_master(dev);
+	struct spi_geni_master *geni_mas_1 = spi_master_get_devdata(spi_1);
+	GENI_SE_DBG(geni_mas_1->ipc, false, geni_mas_1->dev,"%s\n",__func__);
 	return 0;
 }
 

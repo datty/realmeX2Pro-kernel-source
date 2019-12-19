@@ -436,7 +436,7 @@ static void diag_rpmsg_read_work_fn(struct work_struct *work)
 							struct diag_rpmsg_info,
 							read_work);
 
-	if (!rpmsg_info)
+	if (!rpmsg_info || !atomic_read(&rpmsg_info->opened))
 		return;
 
 	mutex_lock(&driver->rpmsginfo_mutex[PERI_RPMSG]);
@@ -479,7 +479,6 @@ static int  diag_rpmsg_write(void *ctxt, unsigned char *buf, int len)
 		mutex_unlock(&driver->rpmsginfo_mutex[PERI_RPMSG]);
 		return -ENODEV;
 	}
-
 	rpdev = (struct rpmsg_device *)rpmsg_info->hdl;
 	err = rpmsg_send(rpdev->ept, buf, len);
 	if (!err) {
@@ -498,8 +497,7 @@ static void diag_rpmsg_late_init_work_fn(struct work_struct *work)
 	struct diag_rpmsg_info *rpmsg_info = container_of(work,
 							struct diag_rpmsg_info,
 							late_init_work);
-
-	if (!rpmsg_info)
+	if (!rpmsg_info || !rpmsg_info->hdl)
 		return;
 
 	mutex_lock(&driver->rpmsginfo_mutex[PERI_RPMSG]);
@@ -520,7 +518,6 @@ static void diag_rpmsg_open_work_fn(struct work_struct *work)
 	struct diag_rpmsg_info *rpmsg_info = container_of(work,
 							struct diag_rpmsg_info,
 							open_work);
-
 	if (!rpmsg_info)
 		return;
 
@@ -528,9 +525,6 @@ static void diag_rpmsg_open_work_fn(struct work_struct *work)
 	if (!rpmsg_info->inited) {
 		mutex_unlock(&driver->rpmsginfo_mutex[PERI_RPMSG]);
 		return;
-	}
-	mutex_unlock(&driver->rpmsginfo_mutex[PERI_RPMSG]);
-
 	if (rpmsg_info->type != TYPE_CNTL) {
 		diagfwd_channel_open(rpmsg_info->fwd_ctxt);
 		diagfwd_late_open(rpmsg_info->fwd_ctxt);
@@ -552,7 +546,6 @@ static void diag_rpmsg_close_work_fn(struct work_struct *work)
 	if (!rpmsg_info->inited || !rpmsg_info->hdl) {
 		mutex_unlock(&driver->rpmsginfo_mutex[PERI_RPMSG]);
 		return;
-	}
 	rpmsg_info->hdl = NULL;
 	mutex_unlock(&driver->rpmsginfo_mutex[PERI_RPMSG]);
 	diagfwd_channel_close(rpmsg_info->fwd_ctxt);
@@ -782,6 +775,7 @@ void diag_rpmsg_early_exit(void)
 			continue;
 		mutex_lock(&driver->rpmsginfo_mutex[peripheral]);
 		__diag_rpmsg_exit(&rpmsg_cntl[peripheral]);
+
 		mutex_unlock(&driver->rpmsginfo_mutex[peripheral]);
 	}
 }
@@ -796,6 +790,7 @@ void diag_rpmsg_exit(void)
 		__diag_rpmsg_exit(&rpmsg_cmd[peripheral]);
 		__diag_rpmsg_exit(&rpmsg_dci[peripheral]);
 		__diag_rpmsg_exit(&rpmsg_dci_cmd[peripheral]);
+
 		mutex_unlock(&driver->rpmsginfo_mutex[peripheral]);
 	}
 }
@@ -837,6 +832,7 @@ static int diag_rpmsg_probe(struct rpmsg_device *rpdev)
 		mutex_unlock(&driver->rpmsginfo_mutex[PERI_RPMSG]);
 
 		dev_set_drvdata(&rpdev->dev, rpmsg_info);
+		atomic_set(&rpmsg_info->opened, 1);
 		diagfwd_channel_read(rpmsg_info->fwd_ctxt);
 		queue_work(rpmsg_info->wq, &rpmsg_info->open_work);
 	}

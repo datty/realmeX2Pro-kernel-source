@@ -30,6 +30,12 @@ int fsa4480_reg_notifier(struct notifier_block *nb,
 			 struct device_node *node);
 int fsa4480_unreg_notifier(struct notifier_block *nb,
 			   struct device_node *node);
+#ifdef VENDOR_EDIT
+/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/29 *
+ * Control to connect L and R to reduce POP */
+int fsa4480_set_LR_cnt(struct device_node *node, bool state);
+#endif /* VENDOR_EDIT */
+
 #else
 static inline int fsa4480_switch_event(struct device_node *node,
 				       enum fsa_function event)
@@ -48,6 +54,14 @@ static inline int fsa4480_unreg_notifier(struct notifier_block *nb,
 {
 	return 0;
 }
+#ifdef VENDOR_EDIT
+/* Zhao.Pan@PSW.MM.AudioDriver.HeadsetDet, 2019/05/29 *
+ * Control to connect L and R to reduce POP */
+static inline int fsa4480_set_LR_cnt(struct device_node *node, bool state)
+{
+	return 0;
+}
+#endif /* VENDOR_EDIT */
 #endif /* CONFIG_QCOM_FSA4480_I2C */
 
 #endif /* FSA4480_I2C_H */
